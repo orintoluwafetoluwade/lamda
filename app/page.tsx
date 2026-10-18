@@ -5,7 +5,7 @@ import { ArrowUp, Bot, Check, ChevronDown, CircleHelp, Clock3, Code2, Command, E
 
 type Message = { role: "user" | "assistant"; content: string };
 type Health = { configured: boolean; model: string; status: string };
-type IntegrationStatus = { github: { configured: boolean }; resend: { configured: boolean }; database: { configured: boolean }; previewRuntime: { configured: boolean } };
+type IntegrationStatus = { github: { configured: boolean }; appwrite: { authConfigured: boolean; databaseConfigured: boolean }; previewRuntime: { configured: boolean } };
 type Project = { id: string; name: string; description?: string; created_at?: string; updated_at?: string };
 const starters = [
   { icon: "layout", title: "Build a SaaS dashboard", prompt: "Plan a modern SaaS analytics dashboard with key metrics, an activity feed, responsive navigation, and polished UI." },
@@ -162,7 +162,7 @@ export default function Home() {
             <div className="composer-wrap">
               <div className="composer">
                 <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Describe the app you want to build..." rows={2} maxLength={12000} />
-                <div className="composer-footer"><div className="composer-tools"><span className="model-select"><Sparkles size={14} />{health?.model || "OpenAI model"}<ChevronDown size={13} /></span><span className="composer-hint">AI can make mistakes. Review generated code.</span></div><button className="send-button" onClick={() => void send()} disabled={!prompt.trim() || busy} aria-label="Send prompt">{busy ? <LoaderCircle className="spin" size={17} /> : <ArrowUp size={18} />}</button></div>
+                <div className="composer-footer"><div className="composer-tools"><span className="model-select"><Sparkles size={14} />{health?.model || "Gemini model"}<ChevronDown size={13} /></span><span className="composer-hint">AI can make mistakes. Review generated code.</span></div><button className="send-button" onClick={() => void send()} disabled={!prompt.trim() || busy} aria-label="Send prompt">{busy ? <LoaderCircle className="spin" size={17} /> : <ArrowUp size={18} />}</button></div>
               </div>
               <div className="composer-caption"><span><ShieldCheck size={12} /> Your API key stays server-side</span><span><kbd>Enter</kbd> to send · <kbd>Shift + Enter</kbd> for new line</span></div>
             </div>
@@ -173,10 +173,9 @@ export default function Home() {
           <div className="settings-page">
             <div className="page-heading"><div className="eyebrow">CONFIGURE YOUR STACK</div><h1>Integrations</h1><p>Connect the services that power your development workflow.</p></div>
             <div className="integration-list">
-              <Integration icon={<Sparkles size={20} />} name="OpenAI" desc="Power the coding agent with OpenAI models." status={health?.configured ? "Connected" : "Needs setup"} ready={Boolean(health?.configured)} detail={health?.configured ? "Model: " + health.model : "Add OPENAI_API_KEY to your server environment."} />
+              <Integration icon={<Sparkles size={20} />} name="Google Gemini" desc="Power the coding agent with Gemini models." status={health?.configured ? "Connected" : "Needs setup"} ready={Boolean(health?.configured)} detail={health?.configured ? "Model: " + health.model : "Add GEMINI_API_KEY to your server environment."} />
               <Integration icon={<Github size={20} />} name="GitHub" desc="Connect repositories, create branches and open pull requests." status={integrationStatus?.github.configured ? "Credentials configured" : "Needs setup"} ready={Boolean(integrationStatus?.github.configured)} detail={integrationStatus?.github.configured ? "Credentials are present; repository actions still need end-to-end implementation." : "Configure a GitHub App and server-side installation credentials."} />
-              <Integration icon={<Mail size={20} />} name="Resend" desc="Send project notifications and transactional email." status={integrationStatus?.resend.configured ? "Credentials configured" : "Needs setup"} ready={Boolean(integrationStatus?.resend.configured)} detail={integrationStatus?.resend.configured ? "Credentials are present; delivery still requires a valid sender and verified domain." : "Set RESEND_API_KEY and a verified RESEND_FROM_EMAIL."} />
-              <Integration icon={<Layers3 size={20} />} name="Database & authentication" desc="Persist users, projects, messages and build history." status={integrationStatus?.database.configured ? "Credentials configured" : "Not connected"} ready={Boolean(integrationStatus?.database.configured)} detail={integrationStatus?.database.configured ? "Apply the SQL migration and verify auth/RLS before production use." : "Configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY."} />
+              <Integration icon={<Layers3 size={20} />} name="Appwrite" desc="Handle authentication and persist projects and messages." status={integrationStatus?.appwrite.databaseConfigured ? "Credentials configured" : "Not connected"} ready={Boolean(integrationStatus?.appwrite.databaseConfigured)} detail={integrationStatus?.appwrite.databaseConfigured ? "Credentials are present; verify collection attributes and test signup, projects, and messages." : "Configure Appwrite endpoint, project, database, collections, and server API key."} />
               <Integration icon={<Terminal size={20} />} name="Isolated preview runtime" desc="Run generated projects away from the application server." status={integrationStatus?.previewRuntime.configured ? "Credentials configured" : "Not connected"} ready={Boolean(integrationStatus?.previewRuntime.configured)} detail={integrationStatus?.previewRuntime.configured ? "Provider credentials are present; runtime adapter still needs implementation." : "A dedicated sandbox provider is required; generated code is not executed here."} />
               <Integration icon={<Rocket size={20} />} name="Deployment" desc="Ship tested projects to a production hosting provider." status="Not connected" detail="Connect a deployment provider after preview and build isolation are implemented." />
             </div>
@@ -214,7 +213,7 @@ export default function Home() {
                 ))}
               </div>
             ) : (
-              <div className="empty-projects"><div className="empty-icon"><FileCode2 size={24} /></div><h2>No saved projects yet</h2><p>Once Supabase is configured, projects and conversation messages are saved to your account here.</p><button className="primary-button" onClick={() => { setMessages([]); setProjectName("Untitled project"); setProjectId(null); setTab("workspace"); }}>Start a project <Plus size={16} /></button></div>
+              <div className="empty-projects"><div className="empty-icon"><FileCode2 size={24} /></div><h2>No saved projects yet</h2><p>Once Appwrite is configured, projects and conversation messages are saved to your account here.</p><button className="primary-button" onClick={() => { setMessages([]); setProjectName("Untitled project"); setProjectId(null); setTab("workspace"); }}>Start a project <Plus size={16} /></button></div>
             )}
           </div>
         )}

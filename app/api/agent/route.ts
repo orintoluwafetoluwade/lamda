@@ -1,9 +1,10 @@
-import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { getCurrentUser } from "@/lib/appwrite/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
 const requestSchema = z.object({
   prompt: z.string().trim().min(3).max(12000),
   history: z.array(z.object({
@@ -12,8 +13,6 @@ const requestSchema = z.object({
   })).max(20).optional()
 });
 
-// Best-effort per-instance protection. Use a shared durable limiter and
-// authenticated users before opening this endpoint to significant traffic.
 const requestBuckets = new Map<string, { count: number; resetAt: number }>();
 const RATE_WINDOW_MS = 60_000;
 const RATE_LIMIT = 8;
@@ -33,56 +32,63 @@ function rateLimited(request: Request) {
 }
 
 export async function GET() {
+  const configured = Boolean(process.env.GEMINI_API_KEY);
   return NextResponse.json({
-    configured: Boolean(process.env.OPENAI_API_KEY),
-    model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
-    status: process.env.OPENAI_API_KEY ? "ready" : "needs_api_key"
+    configured,
+    model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+    status: configured ? "ready" : "needs_api_key"
   }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request) {
-  if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json({ error: "OpenAI is not configured yet. Add OPENAI_API_KEY to your server environment." }, { status: 503 });
+  if (!process.env.GEMINI_API_KEY) {
+    return NextResponse.json({ error: "Gemini is not configured yet. Add GEMINI_API_KEY to the server environment." }, { status: 503 });
   }
-  const hasSupabaseAuth = Boolean((process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL) && (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY));
-  if (!hasSupabaseAuth) return NextResponse.json({ error: "Configure Supabase authentication before enabling paid AI requests." }, { status: 503 });
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Sign in to use the ForgePilot AI assistant." }, { status: 401 });
   if (rateLimited(request)) {
     return NextResponse.json({ error: "Rate limit reached. Wait a minute before trying again." }, { status: 429, headers: { "Retry-After": "60" } });
   }
 
   let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
-  }
+  try { raw = await request.json(); } catch { return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 }); }
   const parsed = requestSchema.safeParse(raw);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Please provide a prompt between 3 and 12,000 characters." }, { status: 400 });
-  }
+  if (!parsed.success) return NextResponse.json({ error: "Please provide a prompt between 3 and 12,000 characters." }, { status: 400 });
 
+  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   try {
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 50_000, maxRetries: 1 });
-    const completion = await client.chat.completions.create({
-      model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
-      temperature: 0.3,
-      messages: [
-        { role: "system", content: "You are ForgePilot, a careful senior full-stack engineer inside an AI app builder. Help users turn ideas into practical implementation plans. Be clear for non-technical founders while remaining technically accurate. When asked to build, return a concise plan, suggested stack, key files to create/change, and implementation code where useful. Never claim you have changed files, run builds, deployed, connected GitHub, or sent email unless a real tool did that. Generated code is proposed output only and must not be executed by this API. Mention missing credentials/infrastructure honestly. Avoid leaking secrets." },
-        ...(parsed.data.history || []).map((message) => ({ role: message.role, content: message.content })),
-        { role: "user", content: parsed.data.prompt }
-      ]
+    const contents = [
+      ...(parsed.data.history || []).map(message => ({
+        role: message.role === "assistant" ? "model" : "user",
+        parts: [{ text: message.content }]
+      })),
+      { role: "user", parts: [{ text: parsed.data.prompt }] }
+    ];
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(50_000),
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: "You are ForgePilot, a careful senior full-stack engineer inside an AI app builder. Help users turn ideas into practical implementation plans. Be clear for non-technical founders while remaining technically accurate. When asked to build, return a concise plan, suggested stack, key files to create/change, and implementation code where useful. Never claim you have changed files, run builds, deployed, connected GitHub, or sent email unless a real tool did that. Generated code is proposed output only and must not be executed by this API. Mention missing credentials/infrastructure honestly. Avoid leaking secrets." }] },
+        contents,
+        generationConfig: { temperature: 0.3, maxOutputTokens: 8192 }
+      })
     });
-    const answer = completion.choices[0]?.message?.content?.trim();
-    if (!answer) return NextResponse.json({ error: "The model returned an empty response. Please try again." }, { status: 502 });
+    const payload = await response.json();
+    if (!response.ok) {
+      const status = response.status;
+      const message = status === 401 || status === 403 ? "Gemini rejected the API key. Check GEMINI_API_KEY." : status === 429 ? "Gemini rate limit or quota reached. Check your API quota." : `Gemini request failed (${status}). Please retry.`;
+      return NextResponse.json({ error: message }, { status: 502 });
+    }
+    const answer = payload?.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || "").join("").trim();
+    if (!answer) return NextResponse.json({ error: "Gemini returned an empty response. Please try again." }, { status: 502 });
+    const usage = payload?.usageMetadata;
     return NextResponse.json({
       answer,
-      model: completion.model,
-      usage: completion.usage ? { inputTokens: completion.usage.prompt_tokens, outputTokens: completion.usage.completion_tokens } : undefined
+      model,
+      usage: usage ? { inputTokens: usage.promptTokenCount, outputTokens: usage.candidatesTokenCount } : undefined
     });
-  } catch (error) {
-    const message = error instanceof OpenAI.APIError
-      ? (error.status === 401 ? "OpenAI rejected the API key. Check OPENAI_API_KEY." : error.status === 429 ? "OpenAI rate limit or quota reached. Check your OpenAI billing and limits." : "OpenAI request failed (" + (error.status ?? "network") + "). Please retry.")
-      : "Could not reach OpenAI. Check server logs and try again.";
-    return NextResponse.json({ error: message }, { status: 502 });
+  } catch {
+    return NextResponse.json({ error: "Could not reach Gemini. Check server logs and try again." }, { status: 502 });
   }
 }

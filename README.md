@@ -1,50 +1,50 @@
 # ForgePilot AI
 
-ForgePilot AI is an original AI development-workspace MVP built with Next.js, TypeScript, OpenAI, and optional Supabase Auth/database and Resend integrations.
+ForgePilot AI is an original AI development-workspace MVP built with Next.js, TypeScript, Google Gemini, and Appwrite.
 
 ## Quick start
 
 Requirements: Node.js 20+ and npm.
 
-\`\`\`bash
+```bash
 npm install
 cp .env.example .env.local
 npm run dev
-\`\`\`
+```
 
-Set \`OPENAI_API_KEY\` to enable the coding assistant. To enable authentication and persistent projects, create a Supabase project, apply \`supabase/migrations/001_initial_schema.sql\`, and set \`NEXT_PUBLIC_SUPABASE_URL\` plus \`NEXT_PUBLIC_SUPABASE_ANON_KEY\`. Configure Supabase Auth email confirmation URLs to include \`/auth/callback\`.
+Set `GEMINI_API_KEY` to enable the coding assistant. Configure Appwrite Auth with email/password enabled, then set `NEXT_PUBLIC_APPWRITE_ENDPOINT` and `NEXT_PUBLIC_APPWRITE_PROJECT_ID`. Create a database and two collections, then set the database and collection IDs plus a server-only `APPWRITE_API_KEY`.
 
 ## Environment variables
 
-- \`OPENAI_API_KEY\` — server-only OpenAI key.
-- \`OPENAI_MODEL\` — optional model override; defaults to \`gpt-4.1-mini\`.
-- \`NEXT_PUBLIC_SUPABASE_URL\`, \`NEXT_PUBLIC_SUPABASE_ANON_KEY\` — Supabase browser auth config (anon key is intended for public use with RLS).
-- \`SUPABASE_URL\`, \`SUPABASE_ANON_KEY\`, \`SUPABASE_SERVICE_ROLE_KEY\` — optional server-side status/administration configuration. Never expose the service role key to clients.
-- \`RESEND_API_KEY\`, \`RESEND_FROM_EMAIL\`, \`INTERNAL_API_SECRET\` — protected server-to-server transactional email dispatch.
-- \`GITHUB_APP_ID\`, \`GITHUB_APP_PRIVATE_KEY\`, \`GITHUB_WEBHOOK_SECRET\` — GitHub App config; repository import/branch/PR flow is not yet implemented.
-- \`SANDBOX_PROVIDER_URL\`, \`SANDBOX_PROVIDER_TOKEN\` — reserved for isolated code execution.
-- \`NEXT_PUBLIC_APP_URL\` — canonical app URL.
+- `GEMINI_API_KEY` — server-only Google Gemini API key.
+- `GEMINI_MODEL` — optional Gemini model override; defaults to `gemini-2.5-flash`.
+- `NEXT_PUBLIC_APPWRITE_ENDPOINT`, `NEXT_PUBLIC_APPWRITE_PROJECT_ID` — Appwrite endpoint and project ID.
+- `APPWRITE_API_KEY` — server-only Appwrite API key with the minimum required database permissions. Never expose it in a `NEXT_PUBLIC_` variable.
+- `APPWRITE_DATABASE_ID` — Appwrite database ID.
+- `APPWRITE_PROJECTS_COLLECTION_ID` — projects collection ID. Required string attributes: `userId`, `name`, `description`, `repositoryFullName`, `defaultBranch`.
+- `APPWRITE_MESSAGES_COLLECTION_ID` — messages collection ID. Required string attributes: `projectId`, `userId`, `role`, `content`, `model`. Add indexes for `projectId` and `userId` if needed for query performance.
+- `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET` — future GitHub App integration.
+- `SANDBOX_PROVIDER_URL`, `SANDBOX_PROVIDER_TOKEN` — reserved for isolated code execution.
+- `NEXT_PUBLIC_APP_URL` — canonical app URL.
 
 ## Implemented
 
 - Responsive dark workspace UI with prompt composer and starter prompts.
-- Server-side OpenAI chat-completions endpoint with input validation, timeout handling, and a best-effort per-instance IP rate limit.
-- Supabase email/password signup/sign-in flow and middleware-protected workspace when Supabase public environment variables are configured.
-- Authenticated, user-scoped project list/create API using Supabase RLS.
-- Server-side integration-readiness endpoint that does not reveal secret values.
-- Protected Resend send endpoint with server secret, input validation and provider idempotency key.
-- Initial Supabase schema with RLS for projects, messages, generated files, build jobs and email events.
+- Gemini generateContent endpoint with input validation, timeout handling, and best-effort per-instance IP rate limiting.
+- Appwrite email/password signup and sign-in using an HttpOnly server session cookie.
+- User-scoped project and conversation persistence in Appwrite, with ownership checks on server routes.
+- Integration-readiness endpoint that does not reveal secret values.
 
-## Known limitations — not a full Lovable replacement yet
+## Known limitations
 
-When Supabase is configured, the workspace creates a project on the first prompt, saves chat messages, and lets users reopen saved conversations. It does not yet generate a persistent source-file tree or provide a live code preview. GitHub OAuth/App installation, repository import, branch/commit/PR tools, signed webhooks, durable background workers, real isolated preview execution, browser tests, and project deployment orchestration still need implementation. A schema or credential indicator is not proof an integration has been end-to-end tested.
+This is not yet a full Lovable replacement. It does not yet generate a persistent source-file tree or provide a live code preview. GitHub repository import/branch/commit/PR tools, signed webhooks, durable background workers, isolated preview execution, browser tests, and deployment orchestration still need implementation. A credential indicator is not proof an integration has been end-to-end tested.
 
-Generated code is never executed on the main application server. Before public production use, configure secrets and Supabase, verify authentication/RLS, add shared durable rate limiting and queue processing, isolated per-project sandbox execution with egress/resource limits, security tests, monitoring, and end-to-end tests.
+Generated code is never executed on the main application server. Before public production use, verify Appwrite collection attributes and permissions, configure secrets, add shared durable rate limiting and queue processing, isolated per-project sandbox execution with egress/resource limits, security tests, monitoring, and end-to-end tests.
 
 ## Checks
 
-\`\`\`bash
+```bash
 npm run typecheck
 npm run build
 npm run lint
-\`\`\`
+```
