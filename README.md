@@ -37,7 +37,7 @@ Set \`OPENAI_API_KEY\` to enable the coding assistant. To enable authentication 
 
 ## Known limitations — not a full Lovable replacement yet
 
-The chat currently returns engineering guidance and proposed code; it does not yet generate a structured project file tree or provide a live code preview. The projects API exists, but the current UI does not yet persist chat history or project files. GitHub OAuth/App installation, repository import, branch/commit/PR tools, signed webhooks, durable background workers, real isolated preview execution, browser tests, and project deployment orchestration still need implementation. A schema or credential indicator is not proof an integration has been end-to-end tested.
+When Supabase is configured, the workspace creates a project on the first prompt, saves chat messages, and lets users reopen saved conversations. It does not yet generate a persistent source-file tree or provide a live code preview. GitHub OAuth/App installation, repository import, branch/commit/PR tools, signed webhooks, durable background workers, real isolated preview execution, browser tests, and project deployment orchestration still need implementation. A schema or credential indicator is not proof an integration has been end-to-end tested.
 
 Generated code is never executed on the main application server. Before public production use, configure secrets and Supabase, verify authentication/RLS, add shared durable rate limiting and queue processing, isolated per-project sandbox execution with egress/resource limits, security tests, monitoring, and end-to-end tests.
 
