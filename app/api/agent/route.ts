@@ -44,6 +44,8 @@ export async function POST(request: Request) {
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ error: "OpenAI is not configured yet. Add OPENAI_API_KEY to your server environment." }, { status: 503 });
   }
+  const hasSupabaseAuth = Boolean((process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL) && (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY));
+  if (!hasSupabaseAuth) return NextResponse.json({ error: "Configure Supabase authentication before enabling paid AI requests." }, { status: 503 });
   if (rateLimited(request)) {
     return NextResponse.json({ error: "Rate limit reached. Wait a minute before trying again." }, { status: 429, headers: { "Retry-After": "60" } });
   }

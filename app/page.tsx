@@ -28,6 +28,7 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [tab, setTab] = useState("workspace");
   const [projectName, setProjectName] = useState("Untitled project");
+  const [projectId, setProjectId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,7 +48,19 @@ export default function Home() {
     setError("");
     setTab("workspace");
     if (projectName === "Untitled project") setProjectName(text.slice(0, 32));
+    let activeProjectId = projectId;
     try {
+      if (!activeProjectId) {
+        const projectResponse = await fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: text.slice(0, 80) || "Untitled project", description: text }) });
+        if (projectResponse.ok) {
+          const projectData = await projectResponse.json();
+          activeProjectId = projectData.project?.id || null;
+          if (activeProjectId) setProjectId(activeProjectId);
+        }
+      }
+      if (activeProjectId) {
+        await fetch("/api/projects/" + activeProjectId + "/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "user", content: text }) }).catch(() => undefined);
+      }
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -56,6 +69,9 @@ export default function Home() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "The request failed.");
       setMessages([...next, { role: "assistant", content: data.answer }]);
+      if (activeProjectId) {
+        await fetch("/api/projects/" + activeProjectId + "/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "assistant", content: data.answer, model: data.model }) }).catch(() => undefined);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
@@ -74,7 +90,7 @@ export default function Home() {
           </>}
         </div>
         {!sidebarOpen && <button className="icon-button expand-toggle" title="Expand sidebar" onClick={() => setSidebarOpen(true)}><Menu size={18} /></button>}
-        <button className="new-project" onClick={() => { setMessages([]); setProjectName("Untitled project"); setTab("workspace"); }}>
+        <button className="new-project" onClick={() => { setMessages([]); setProjectName("Untitled project"); setProjectId(null); setTab("workspace"); }}>
           <Plus size={17} />{sidebarOpen && <span>New project</span>}{sidebarOpen && <kbd>⌘ K</kbd>}
         </button>
         {sidebarOpen && <>
@@ -169,7 +185,7 @@ export default function Home() {
         )}
 
         {tab === "projects" && (
-          <div className="settings-page"><div className="page-heading"><div className="eyebrow">YOUR WORKSPACE</div><h1>My projects</h1><p>Your projects will appear here as persistent storage is connected.</p></div><div className="empty-projects"><div className="empty-icon"><FileCode2 size={24} /></div><h2>No saved projects yet</h2><p>This scaffold currently keeps the conversation in this browser session. Connect a database to save projects across devices and sessions.</p><button className="primary-button" onClick={() => { setMessages([]); setProjectName("Untitled project"); setTab("workspace"); }}>Start a project <Plus size={16} /></button></div></div>
+          <div className="settings-page"><div className="page-heading"><div className="eyebrow">YOUR WORKSPACE</div><h1>My projects</h1><p>Your projects will appear here as persistent storage is connected.</p></div><div className="empty-projects"><div className="empty-icon"><FileCode2 size={24} /></div><h2>No saved projects yet</h2><p>This scaffold currently keeps the conversation in this browser session. Connect a database to save projects across devices and sessions.</p><button className="primary-button" onClick={() => { setMessages([]); setProjectName("Untitled project"); setProjectId(null); setTab("workspace"); }}>Start a project <Plus size={16} /></button></div></div>
         )}
 
         <footer className="footer"><span>© 2026 ForgePilot AI</span><span><span className="footer-dot" /> Development preview · Not production-ready</span><span className="footer-right"><ShieldCheck size={13} /> Built with care</span></footer>
