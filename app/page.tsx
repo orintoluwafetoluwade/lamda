@@ -6,6 +6,7 @@ import { ArrowUp, Bot, Check, ChevronDown, CircleHelp, Clock3, Code2, Command, E
 type Message = { role: "user" | "assistant"; content: string };
 type Health = { configured: boolean; model: string; status: string };
 type IntegrationStatus = { github: { configured: boolean }; resend: { configured: boolean }; database: { configured: boolean }; previewRuntime: { configured: boolean } };
+type Project = { id: string; name: string; description?: string; created_at?: string; updated_at?: string };
 const starters = [
   { icon: "layout", title: "Build a SaaS dashboard", prompt: "Plan a modern SaaS analytics dashboard with key metrics, an activity feed, responsive navigation, and polished UI." },
   { icon: "layers", title: "Create a landing page", prompt: "Design a high-converting landing page for a productivity app with hero, benefits, features, pricing, and CTA." },
@@ -24,6 +25,7 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [health, setHealth] = useState<Health | null>(null);
   const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatus | null>(null);
+  const [savedProjects, setSavedProjects] = useState<Project[]>([]);
   const [error, setError] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [tab, setTab] = useState("workspace");
@@ -36,6 +38,10 @@ export default function Home() {
       .catch(() => setHealth({ configured: false, model: "unknown", status: "offline" }));
   }, []);
   useEffect(() => { fetch("/api/integrations").then((response) => response.json()).then(setIntegrationStatus).catch(() => setIntegrationStatus(null)); }, []);
+  useEffect(() => {
+    if (tab !== "projects") return;
+    fetch("/api/projects").then(async (response) => response.ok ? response.json() : null).then((data) => { if (data?.projects) setSavedProjects(data.projects); }).catch(() => undefined);
+  }, [tab]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, busy]);
 
   async function send(value = prompt) {
@@ -55,7 +61,10 @@ export default function Home() {
         if (projectResponse.ok) {
           const projectData = await projectResponse.json();
           activeProjectId = projectData.project?.id || null;
-          if (activeProjectId) setProjectId(activeProjectId);
+          if (activeProjectId) {
+            setProjectId(activeProjectId);
+            setSavedProjects((current) => [projectData.project, ...current.filter((item) => item.id !== projectData.project.id)]);
+          }
         }
       }
       if (activeProjectId) {
@@ -185,7 +194,29 @@ export default function Home() {
         )}
 
         {tab === "projects" && (
-          <div className="settings-page"><div className="page-heading"><div className="eyebrow">YOUR WORKSPACE</div><h1>My projects</h1><p>Your projects will appear here as persistent storage is connected.</p></div><div className="empty-projects"><div className="empty-icon"><FileCode2 size={24} /></div><h2>No saved projects yet</h2><p>This scaffold currently keeps the conversation in this browser session. Connect a database to save projects across devices and sessions.</p><button className="primary-button" onClick={() => { setMessages([]); setProjectName("Untitled project"); setProjectId(null); setTab("workspace"); }}>Start a project <Plus size={16} /></button></div></div>
+          <div className="settings-page">
+            <div className="page-heading"><div className="eyebrow">YOUR WORKSPACE</div><h1>My projects</h1><p>Open a saved project or start a fresh idea.</p></div>
+            {savedProjects.length > 0 ? (
+              <div className="starter-grid">
+                {savedProjects.map((project) => (
+                  <button className="starter-card" key={project.id} onClick={async () => {
+                    setProjectId(project.id);
+                    setProjectName(project.name);
+                    setTab("workspace");
+                    try {
+                      const response = await fetch("/api/projects/" + project.id + "/messages");
+                      const data = response.ok ? await response.json() : null;
+                      if (data?.messages) setMessages(data.messages.map((message: { role: "user" | "assistant"; content: string }) => ({ role: message.role, content: message.content })));
+                    } catch { setMessages([]); }
+                  }}>
+                    <span className="starter-icon"><FileCode2 size={17} /></span><span className="starter-title">{project.name}</span><span className="starter-arrow">↗</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-projects"><div className="empty-icon"><FileCode2 size={24} /></div><h2>No saved projects yet</h2><p>Once Supabase is configured, projects and conversation messages are saved to your account here.</p><button className="primary-button" onClick={() => { setMessages([]); setProjectName("Untitled project"); setProjectId(null); setTab("workspace"); }}>Start a project <Plus size={16} /></button></div>
+            )}
+          </div>
         )}
 
         <footer className="footer"><span>© 2026 ForgePilot AI</span><span><span className="footer-dot" /> Development preview · Not production-ready</span><span className="footer-right"><ShieldCheck size={13} /> Built with care</span></footer>
