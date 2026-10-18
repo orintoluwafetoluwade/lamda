@@ -5,6 +5,7 @@ import { ArrowUp, Bot, Check, ChevronDown, CircleHelp, Clock3, Code2, Command, E
 
 type Message = { role: "user" | "assistant"; content: string };
 type Health = { configured: boolean; model: string; status: string };
+type IntegrationStatus = { github: { configured: boolean }; resend: { configured: boolean }; database: { configured: boolean }; previewRuntime: { configured: boolean } };
 const starters = [
   { icon: "layout", title: "Build a SaaS dashboard", prompt: "Plan a modern SaaS analytics dashboard with key metrics, an activity feed, responsive navigation, and polished UI." },
   { icon: "layers", title: "Create a landing page", prompt: "Design a high-converting landing page for a productivity app with hero, benefits, features, pricing, and CTA." },
@@ -22,6 +23,7 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
   const [health, setHealth] = useState<Health | null>(null);
+  const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatus | null>(null);
   const [error, setError] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [tab, setTab] = useState("workspace");
@@ -32,6 +34,7 @@ export default function Home() {
     fetch("/api/agent").then((response) => response.json()).then(setHealth)
       .catch(() => setHealth({ configured: false, model: "unknown", status: "offline" }));
   }, []);
+  useEffect(() => { fetch("/api/integrations").then((response) => response.json()).then(setIntegrationStatus).catch(() => setIntegrationStatus(null)); }, []);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, busy]);
 
   async function send(value = prompt) {
@@ -146,10 +149,10 @@ export default function Home() {
             <div className="page-heading"><div className="eyebrow">CONFIGURE YOUR STACK</div><h1>Integrations</h1><p>Connect the services that power your development workflow.</p></div>
             <div className="integration-list">
               <Integration icon={<Sparkles size={20} />} name="OpenAI" desc="Power the coding agent with OpenAI models." status={health?.configured ? "Connected" : "Needs setup"} ready={Boolean(health?.configured)} detail={health?.configured ? "Model: " + health.model : "Add OPENAI_API_KEY to your server environment."} />
-              <Integration icon={<Github size={20} />} name="GitHub" desc="Connect repositories, create branches and open pull requests." status="Needs setup" detail="Configure a GitHub App and server-side installation credentials." />
-              <Integration icon={<Mail size={20} />} name="Resend" desc="Send project notifications and transactional email." status="Needs setup" detail="Set RESEND_API_KEY and a verified RESEND_FROM_EMAIL." />
-              <Integration icon={<Layers3 size={20} />} name="Database & authentication" desc="Persist users, projects, messages and build history." status="Not connected" detail="Configure a managed database and authentication provider before production use." />
-              <Integration icon={<Terminal size={20} />} name="Isolated preview runtime" desc="Run generated projects away from the application server." status="Not connected" detail="A dedicated sandbox provider is required; generated code is not executed here." />
+              <Integration icon={<Github size={20} />} name="GitHub" desc="Connect repositories, create branches and open pull requests." status={integrationStatus?.github.configured ? "Credentials configured" : "Needs setup"} ready={Boolean(integrationStatus?.github.configured)} detail={integrationStatus?.github.configured ? "Credentials are present; repository actions still need end-to-end implementation." : "Configure a GitHub App and server-side installation credentials."} />
+              <Integration icon={<Mail size={20} />} name="Resend" desc="Send project notifications and transactional email." status={integrationStatus?.resend.configured ? "Credentials configured" : "Needs setup"} ready={Boolean(integrationStatus?.resend.configured)} detail={integrationStatus?.resend.configured ? "Credentials are present; delivery still requires a valid sender and verified domain." : "Set RESEND_API_KEY and a verified RESEND_FROM_EMAIL."} />
+              <Integration icon={<Layers3 size={20} />} name="Database & authentication" desc="Persist users, projects, messages and build history." status={integrationStatus?.database.configured ? "Credentials configured" : "Not connected"} ready={Boolean(integrationStatus?.database.configured)} detail={integrationStatus?.database.configured ? "Apply the SQL migration and verify auth/RLS before production use." : "Configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY."} />
+              <Integration icon={<Terminal size={20} />} name="Isolated preview runtime" desc="Run generated projects away from the application server." status={integrationStatus?.previewRuntime.configured ? "Credentials configured" : "Not connected"} ready={Boolean(integrationStatus?.previewRuntime.configured)} detail={integrationStatus?.previewRuntime.configured ? "Provider credentials are present; runtime adapter still needs implementation." : "A dedicated sandbox provider is required; generated code is not executed here."} />
               <Integration icon={<Rocket size={20} />} name="Deployment" desc="Ship tested projects to a production hosting provider." status="Not connected" detail="Connect a deployment provider after preview and build isolation are implemented." />
             </div>
             <div className="security-note"><ShieldCheck size={18} /><div><b>Security by default</b><p>Keep API keys in server environment variables. Never add secret values to client-side code or commit them to Git.</p></div></div>

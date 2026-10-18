@@ -6,7 +6,9 @@ export async function GET() {
   const openai = Boolean(process.env.OPENAI_API_KEY);
   const resend = Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL);
   const githubApp = Boolean(process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY && process.env.GITHUB_WEBHOOK_SECRET);
-  const database = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const database = Boolean(supabaseUrl && supabaseKey);
   const sandbox = Boolean(process.env.SANDBOX_PROVIDER_URL && process.env.SANDBOX_PROVIDER_TOKEN);
   return NextResponse.json({
     openai: { configured: openai, model: process.env.OPENAI_MODEL || "gpt-4.1-mini" },
