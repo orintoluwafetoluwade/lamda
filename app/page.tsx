@@ -61,7 +61,7 @@ export default function Home() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not generate a website preview.");
-      const html = String(data.answer || "").replace(/^\`\`\`(?:html)?\\s*/i, "").replace(/\\s*\`\`\`$/i, "").trim();
+      const html = String(data.answer || "").replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
       if (!html.toLowerCase().includes("<html") && !html.toLowerCase().includes("<!doctype")) {
         throw new Error("Gemini did not return a complete HTML preview. Try generating the preview again.");
       }
