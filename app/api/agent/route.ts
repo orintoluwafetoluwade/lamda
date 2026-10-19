@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const requestSchema = z.object({
-  prompt: z.string().trim().min(1).max(12000),
+  prompt: z.string().trim().min(1).max(30000),
   history: z.array(z.object({
     role: z.enum(["user", "assistant"]),
     content: z.string().max(12000)
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   let raw: unknown;
   try { raw = await request.json(); } catch { return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 }); }
   const parsed = requestSchema.safeParse(raw);
-  if (!parsed.success) return NextResponse.json({ error: "Please provide a prompt between 1 and 12,000 characters." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Please provide a non-empty prompt up to 30,000 characters." }, { status: 400 });
 
   const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   try {
