@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Bot, Check, ChevronDown, CircleHelp, Clock3, Code2, Command, ExternalLink, FileCode2, Github, Layers3, LayoutDashboard, LoaderCircle, Menu, MessageSquare, PanelLeftClose, Plus, Rocket, Settings2, ShieldCheck, Sparkles, Terminal, WandSparkles } from "lucide-react";
+import { ArrowUp, Bot, Check, ChevronDown, CircleHelp, Clock3, Code2, Command, ExternalLink, Eye, FileCode2, Github, Layers3, LayoutDashboard, LoaderCircle, Menu, MessageSquare, Monitor, PanelLeftClose, Plus, Rocket, Settings2, ShieldCheck, Sparkles, Terminal, WandSparkles, X } from "lucide-react";
 
 type Message = { role: "user" | "assistant"; content: string };
 type Health = { configured: boolean; model: string; status: string };
@@ -27,6 +27,10 @@ export default function Home() {
   const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatus | null>(null);
   const [savedProjects, setSavedProjects] = useState<Project[]>([]);
   const [error, setError] = useState("");
+  const [previewCode, setPreviewCode] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewError, setPreviewError] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [tab, setTab] = useState("workspace");
   const [projectName, setProjectName] = useState("Untitled project");
@@ -43,6 +47,32 @@ export default function Home() {
     fetch("/api/projects").then(async (response) => response.ok ? response.json() : null).then((data) => { if (data?.projects) setSavedProjects(data.projects); }).catch(() => undefined);
   }, [tab]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, busy]);
+
+  async function buildPreview(source: string) {
+    setPreviewBusy(true);
+    setPreviewError("");
+    try {
+      const response = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: "Turn the following website plan/source into a polished, complete, responsive, self-contained HTML website preview. Return ONLY a complete HTML document, starting with <!doctype html> and ending with </html>. Put all CSS in a style tag and any necessary JavaScript in a script tag. Do not use React, JSX, imports, external build tools, or markdown fences. Make the navigation and visible controls work where practical. This is a visual runnable prototype of the described website, not a claim that a multi-file app has been compiled.\n\nSOURCE TO IMPLEMENT:\n" + source.slice(0, 9500)
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not generate a website preview.");
+      const html = String(data.answer || "").replace(/^\`\`\`(?:html)?\\s*/i, "").replace(/\\s*\`\`\`$/i, "").trim();
+      if (!html.toLowerCase().includes("<html") && !html.toLowerCase().includes("<!doctype")) {
+        throw new Error("Gemini did not return a complete HTML preview. Try generating the preview again.");
+      }
+      setPreviewCode(html);
+      setPreviewOpen(true);
+    } catch (e) {
+      setPreviewError(e instanceof Error ? e.message : "Preview generation failed.");
+    } finally {
+      setPreviewBusy(false);
+    }
+  }
 
   async function send(value = prompt) {
     const text = value.trim();
@@ -150,6 +180,14 @@ export default function Home() {
                       <div className="message-body">
                         <div className="message-label">{message.role === "assistant" ? "FORGEPILOT" : "YOU"}</div>
                         <div className="message-content"><p>{message.content}</p></div>
+                        {message.role === "assistant" && /\`\`\`/.test(message.content) && (
+                          <div className="message-actions">
+                            <button className="preview-action" onClick={() => void buildPreview(message.content)} disabled={previewBusy}>
+                              {previewBusy ? <LoaderCircle className="spin" size={14} /> : <Monitor size={14} />}
+                              {previewBusy ? "Building website preview…" : "Build editable website preview"}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -159,6 +197,28 @@ export default function Home() {
                 </div>
               )}
             </div>
+            {previewOpen && (
+              <section className="preview-workbench" aria-label="Editable website preview">
+                <div className="preview-toolbar">
+                  <div className="preview-heading"><Monitor size={16} /><div><strong>Website preview</strong><span>Sandboxed prototype · edit HTML to update live</span></div></div>
+                  <div className="preview-toolbar-actions">
+                    <button className="preview-small-button" onClick={() => setPreviewCode((code) => code)} title="Refresh preview"><Eye size={14} /> Live</button>
+                    <button className="preview-close" onClick={() => setPreviewOpen(false)} aria-label="Close preview"><X size={16} /></button>
+                  </div>
+                </div>
+                <div className="preview-split">
+                  <div className="preview-editor">
+                    <div className="preview-pane-label"><Code2 size={13} /> EDIT HTML</div>
+                    <textarea aria-label="Editable website HTML source" spellCheck={false} value={previewCode} onChange={(event) => setPreviewCode(event.target.value)} />
+                  </div>
+                  <div className="preview-browser">
+                    <div className="preview-pane-label"><span className="browser-dots"><i /><i /><i /></span> LIVE WEBSITE</div>
+                    <iframe title="Live website preview" sandbox="allow-forms allow-scripts" srcDoc={previewCode} />
+                  </div>
+                </div>
+                {previewError && <p className="preview-error">{previewError}</p>}
+              </section>
+            )}
             <div className="composer-wrap">
               <div className="composer">
                 <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Describe the app you want to build..." rows={2} maxLength={12000} />
