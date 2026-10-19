@@ -146,7 +146,7 @@ export default function Home() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "The request failed.");
       const rawAnswer = String(data.answer || "");
-      const updatedHtml = rawAnswer.replace(/^```(?:html)?\\s*/i, "").replace(/\\s*```$/i, "").trim();
+      const updatedHtml = rawAnswer.replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
       const updatedExistingWebsite = Boolean(previewCode.trim()) && (updatedHtml.toLowerCase().includes("<html") || updatedHtml.toLowerCase().includes("<!doctype"));
       if (updatedExistingWebsite) {
         setPreviewCode(updatedHtml);
