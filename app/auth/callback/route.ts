@@ -1,7 +1,4 @@
-import { NextResponse } from "next/server";
-
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const next = url.searchParams.get("next");
-  return NextResponse.redirect(new URL(next && next.startsWith("/") ? next : "/", url.origin));
-}
+import { NextResponse,type NextRequest } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+export async function GET(request:NextRequest){const {searchParams,origin}=request.nextUrl;const code=searchParams.get("code");const next=searchParams.get("next");if(code){const store=await cookies();const url=process.env.NEXT_PUBLIC_SUPABASE_URL;const key=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;if(url&&key){const s=createServerClient(url,key,{cookies:{getAll:()=>store.getAll(),setAll:items=>items.forEach(({name,value,options})=>store.set(name,value,options))}});const {error}=await s.auth.exchangeCodeForSession(code);if(!error)return NextResponse.redirect(new URL(next?.startsWith("/")?next:"/",origin))}}return NextResponse.redirect(new URL("/login?error=confirmation",origin))}
