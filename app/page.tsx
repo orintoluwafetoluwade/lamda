@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Bot, Check, ChevronDown, CircleHelp, Clock3, Code2, Command, ExternalLink, Eye, FileCode2, Github, Layers3, LayoutDashboard, LoaderCircle, Menu, MessageSquare, Monitor, PanelLeftClose, Plus, Rocket, Settings2, ShieldCheck, Sparkles, Terminal, WandSparkles, X } from "lucide-react";
 
 type Message = { role: "user" | "assistant"; content: string };
+const WEBSITE_STATE_PREFIX = "__FORGEPILOT_WEBSITE_HTML_V1__\n";
 type Health = { configured: boolean; model: string; status: string };
 type IntegrationStatus = { github: { configured: boolean }; supabase: { authConfigured: boolean; databaseConfigured: boolean; mode: string }; previewRuntime: { configured: boolean } };
 type Project = { id: string; name: string; description?: string; created_at?: string; updated_at?: string };
@@ -70,6 +71,13 @@ export default function Home() {
       }
       setPreviewCode(html);
       setPreviewOpen(true);
+      if (projectId && html.length + WEBSITE_STATE_PREFIX.length <= 50000) {
+        await fetch("/api/projects/" + projectId + "/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: "assistant", content: WEBSITE_STATE_PREFIX + html })
+        }).catch(() => undefined);
+      }
     } catch (e) {
       setPreviewError(e instanceof Error ? e.message : "Preview generation failed.");
     } finally {
@@ -135,8 +143,9 @@ export default function Home() {
       if (activeProjectId) {
         await fetch("/api/projects/" + activeProjectId + "/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "user", content: text }) }).catch(() => undefined);
       }
-      const requestPrompt = previewCode.trim()
-        ? "You are editing the existing website in the currently selected project. Apply the user’s requested change to this exact HTML, preserve all unrelated layout, styling, content, and behavior, and return ONLY the complete updated HTML document with no markdown fences or explanation.\n\nCURRENT WEBSITE HTML:\n" + previewCode.slice(0, 9500) + "\n\nUSER CHANGE REQUEST:\n" + text
+      const editingExistingWebsite = Boolean(previewCode.trim());
+      const requestPrompt = editingExistingWebsite
+        ? "You are making a precise edit to an EXISTING website. Do NOT regenerate or return the full HTML. Preserve every unrelated byte of the current source. Return ONLY valid JSON in this exact shape: {\"changes\":[{\"find\":\"exact existing source substring\",\"replace\":\"replacement substring\"}]}. Each find string must occur exactly once in the current HTML. Make the smallest possible targeted replacement(s); for a color change, replace only the relevant CSS color value/declaration. Do not include markdown fences or commentary. If the requested edit is ambiguous, return {\"changes\":[],\"question\":\"one short clarification\"}.\n\nCURRENT WEBSITE HTML (source of truth):\n" + previewCode.slice(0, 45000) + "\n\nUSER CHANGE REQUEST (can be very short):\n" + text
         : text;
       const response = await fetch("/api/agent", {
         method: "POST",
@@ -146,16 +155,32 @@ export default function Home() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "The request failed.");
       const rawAnswer = String(data.answer || "");
-      const updatedHtml = rawAnswer.replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
-      const updatedExistingWebsite = Boolean(previewCode.trim()) && (updatedHtml.toLowerCase().includes("<html") || updatedHtml.toLowerCase().includes("<!doctype"));
-      if (updatedExistingWebsite) {
+      let updatedExistingWebsite = false;
+      let visibleAnswer = rawAnswer;
+      let updatedHtml = previewCode;
+      if (editingExistingWebsite) {
+        const jsonText = rawAnswer.replace(/^\x60\x60\x60(?:json)?\s*/i, "").replace(/\s*\x60\x60\x60$/i, "").trim();
+        let parsed;
+        try { parsed = JSON.parse(jsonText); } catch { throw new Error("The AI response was not a safe targeted edit. Your existing website was left unchanged. Please retry with a more specific instruction."); }
+        if (parsed.question) throw new Error(parsed.question);
+        if (!Array.isArray(parsed.changes) || parsed.changes.length === 0) throw new Error("The AI could not identify a safe, specific change. Your existing website was left unchanged. Please describe the exact change you want.");
+        for (const change of parsed.changes) {
+          if (typeof change.find !== "string" || !change.find || typeof change.replace !== "string") throw new Error("The AI returned an invalid edit. Your existing website was left unchanged.");
+          const first = updatedHtml.indexOf(change.find);
+          if (first < 0 || updatedHtml.indexOf(change.find, first + change.find.length) >= 0) throw new Error("I couldn't match the requested edit to one unique part of the existing code, so I left your website unchanged. Please make the instruction more specific.");
+          updatedHtml = updatedHtml.slice(0, first) + change.replace + updatedHtml.slice(first + change.find.length);
+        }
         setPreviewCode(updatedHtml);
         setPreviewOpen(true);
+        updatedExistingWebsite = true;
+        visibleAnswer = "Made " + parsed.changes.length + " targeted change" + (parsed.changes.length === 1 ? "" : "s") + " to the existing website. Unrelated code was preserved.";
       }
-      const visibleAnswer = updatedExistingWebsite ? "Updated the existing website preview in this project. The live preview now reflects your requested change." : rawAnswer;
       setMessages([...next, { role: "assistant", content: visibleAnswer }]);
       if (activeProjectId) {
         await fetch("/api/projects/" + activeProjectId + "/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "assistant", content: visibleAnswer, model: data.model }) }).catch(() => undefined);
+        if (updatedExistingWebsite && updatedHtml.length + WEBSITE_STATE_PREFIX.length <= 50000) {
+          await fetch("/api/projects/" + activeProjectId + "/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "assistant", content: WEBSITE_STATE_PREFIX + updatedHtml, model: data.model }) }).catch(() => undefined);
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
@@ -323,7 +348,18 @@ export default function Home() {
                     try {
                       const response = await fetch("/api/projects/" + project.id + "/messages");
                       const data = response.ok ? await response.json() : null;
-                      if (data?.messages) setMessages(data.messages.map((message: { role: "user" | "assistant"; content: string }) => ({ role: message.role, content: message.content })));
+                      if (data?.messages) {
+                        const loaded = data.messages;
+                        const savedWebsite = [...loaded].reverse().find((message) => message.role === "assistant" && message.content.startsWith(WEBSITE_STATE_PREFIX));
+                        if (savedWebsite) {
+                          setPreviewCode(savedWebsite.content.slice(WEBSITE_STATE_PREFIX.length));
+                          setPreviewOpen(true);
+                        } else {
+                          setPreviewCode("");
+                          setPreviewOpen(false);
+                        }
+                        setMessages(loaded.filter((message) => !message.content.startsWith(WEBSITE_STATE_PREFIX)).map((message) => ({ role: message.role, content: message.content })));
+                      }
                     } catch { setMessages([]); }
                   }}>
                     <span className="starter-icon"><FileCode2 size={17} /></span><span className="starter-title">{project.name}</span><span className="starter-arrow">↗</span>
