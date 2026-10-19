@@ -349,7 +349,7 @@ export default function Home() {
                       const response = await fetch("/api/projects/" + project.id + "/messages");
                       const data = response.ok ? await response.json() : null;
                       if (data?.messages) {
-                        const loaded = data.messages;
+                        const loaded: Message[] = data.messages;
                         const savedWebsite = [...loaded].reverse().find((message) => message.role === "assistant" && message.content.startsWith(WEBSITE_STATE_PREFIX));
                         if (savedWebsite) {
                           setPreviewCode(savedWebsite.content.slice(WEBSITE_STATE_PREFIX.length));
