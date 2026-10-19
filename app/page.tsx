@@ -34,6 +34,9 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [tab, setTab] = useState("workspace");
   const [projectName, setProjectName] = useState("Untitled project");
+  const [newProjectName, setNewProjectName] = useState("");
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [createProjectError, setCreateProjectError] = useState("");
   const [projectId, setProjectId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -74,29 +77,61 @@ export default function Home() {
     }
   }
 
+  async function createProject() {
+    const name = newProjectName.trim();
+    if (!name || creatingProject) return;
+    setCreatingProject(true);
+    setCreateProjectError("");
+    try {
+      const response = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, description: "" })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.project?.id) throw new Error(data.error || "Could not create this project.");
+      setProjectId(data.project.id);
+      setProjectName(data.project.name);
+      setMessages([]);
+      setPreviewCode("");
+      setPreviewOpen(false);
+      setSavedProjects((current) => [data.project, ...current.filter((item) => item.id !== data.project.id)]);
+      setTab("workspace");
+    } catch (e) {
+      setCreateProjectError(e instanceof Error ? e.message : "Could not create this project.");
+    } finally {
+      setCreatingProject(false);
+    }
+  }
+
+  async function startNewProject(suggestedName = "", suggestedPrompt = "") {
+    setMessages([]);
+    setProjectName("Untitled project");
+    setProjectId(null);
+    setPrompt(suggestedPrompt);
+    setPreviewCode("");
+    setPreviewOpen(false);
+    setError("");
+    setNewProjectName(suggestedName);
+    setCreateProjectError("");
+    setTab("new-project");
+  }
+
   async function send(value = prompt) {
     const text = value.trim();
     if (!text || busy) return;
+    if (!projectId) {
+      setError("Create or open a project first. Your prompts will then stay in that project.");
+      return;
+    }
     const next: Message[] = [...messages, { role: "user", content: text }];
     setMessages(next);
     setPrompt("");
     setBusy(true);
     setError("");
     setTab("workspace");
-    if (projectName === "Untitled project") setProjectName(text.slice(0, 32));
-    let activeProjectId = projectId;
+    const activeProjectId = projectId;
     try {
-      if (!activeProjectId) {
-        const projectResponse = await fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: text.slice(0, 80) || "Untitled project", description: text }) });
-        if (projectResponse.ok) {
-          const projectData = await projectResponse.json();
-          activeProjectId = projectData.project?.id || null;
-          if (activeProjectId) {
-            setProjectId(activeProjectId);
-            setSavedProjects((current) => [projectData.project, ...current.filter((item) => item.id !== projectData.project.id)]);
-          }
-        }
-      }
       if (activeProjectId) {
         await fetch("/api/projects/" + activeProjectId + "/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "user", content: text }) }).catch(() => undefined);
       }
@@ -129,13 +164,13 @@ export default function Home() {
           </>}
         </div>
         {!sidebarOpen && <button className="icon-button expand-toggle" title="Expand sidebar" onClick={() => setSidebarOpen(true)}><Menu size={18} /></button>}
-        <button className="new-project" onClick={() => { setMessages([]); setProjectName("Untitled project"); setProjectId(null); setTab("workspace"); }}>
+        <button className="new-project" onClick={() => void startNewProject()}>
           <Plus size={17} />{sidebarOpen && <span>New project</span>}{sidebarOpen && <kbd>⌘ K</kbd>}
         </button>
         {sidebarOpen && <>
           <div className="side-label">WORKSPACE</div>
           <button className={"nav-item " + (tab === "workspace" ? "active" : "")} onClick={() => setTab("workspace")}><MessageSquare size={16} /><span>AI workspace</span></button>
-          <button className={"nav-item " + (tab === "projects" ? "active" : "")} onClick={() => setTab("projects")}><Layers3 size={16} /><span>My projects</span><span className="nav-count">{messages.length ? "1" : "0"}</span></button>
+          <button className={"nav-item " + (tab === "projects" ? "active" : "")} onClick={() => setTab("projects")}><Layers3 size={16} /><span>My projects</span><span className="nav-count">{savedProjects.length}</span></button>
           <div className="side-label integrations-label">DEVELOPMENT</div>
           <button className={"nav-item " + (tab === "github" ? "active" : "")} onClick={() => setTab("github")}><Github size={16} /><span>GitHub</span><span className="mini-status" /></button>
           <button className={"nav-item " + (tab === "integrations" ? "active" : "")} onClick={() => setTab("integrations")}><Settings2 size={16} /><span>Integrations</span></button>
@@ -155,6 +190,18 @@ export default function Home() {
           </div>
         </header>
 
+        {tab === "new-project" && (
+          <div className="settings-page new-project-page">
+            <div className="page-heading"><div className="eyebrow">START SOMETHING NEW</div><h1>Name your project</h1><p>Give this project a name first. Your initial prompt and all later changes will stay together in this workspace.</p></div>
+            <form className="project-create-form" onSubmit={(event) => { event.preventDefault(); void createProject(); }}>
+              <label htmlFor="new-project-name">Project name</label>
+              <input id="new-project-name" autoFocus maxLength={120} value={newProjectName} onChange={(event) => setNewProjectName(event.target.value)} placeholder="e.g. My portfolio website" />
+              {createProjectError && <p className="project-create-error" role="alert">{createProjectError}</p>}
+              <div className="project-create-actions"><button type="button" className="outline-button" onClick={() => setTab("projects")}>Cancel</button><button type="submit" className="primary-button" disabled={!newProjectName.trim() || creatingProject}>{creatingProject ? <LoaderCircle className="spin" size={15} /> : <Plus size={15} />}{creatingProject ? "Creating project…" : "Create project"}</button></div>
+            </form>
+          </div>
+        )}
+
         {tab === "workspace" && (
           <div className="workspace">
             <div className="conversation-area">
@@ -166,7 +213,7 @@ export default function Home() {
                   <p className="welcome-copy">Describe what you want to build. ForgePilot helps you shape the idea, plan the architecture, and write the code to bring it to life.</p>
                   <div className="starter-grid">
                     {starters.map((starter) => (
-                      <button className="starter-card" key={starter.title} onClick={() => void send(starter.prompt)}>
+                      <button className="starter-card" key={starter.title} onClick={() => void startNewProject(starter.title, starter.prompt)}>
                         <span className="starter-icon"><StarterIcon name={starter.icon} /></span><span className="starter-title">{starter.title}</span><span className="starter-arrow">↗</span>
                       </button>
                     ))}
@@ -273,7 +320,7 @@ export default function Home() {
                 ))}
               </div>
             ) : (
-              <div className="empty-projects"><div className="empty-icon"><FileCode2 size={24} /></div><h2>No saved projects yet</h2><p>Your projects and conversation messages are saved securely to your Supabase account.</p><button className="primary-button" onClick={() => { setMessages([]); setProjectName("Untitled project"); setProjectId(null); setTab("workspace"); }}>Start a project <Plus size={16} /></button></div>
+              <div className="empty-projects"><div className="empty-icon"><FileCode2 size={24} /></div><h2>No saved projects yet</h2><p>Your projects and conversation messages are saved securely to your Supabase account.</p><button className="primary-button" onClick={() => void startNewProject()}>Start a project <Plus size={16} /></button></div>
             )}
           </div>
         )}
