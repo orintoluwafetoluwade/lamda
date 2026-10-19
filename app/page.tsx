@@ -135,16 +135,27 @@ export default function Home() {
       if (activeProjectId) {
         await fetch("/api/projects/" + activeProjectId + "/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "user", content: text }) }).catch(() => undefined);
       }
+      const requestPrompt = previewCode.trim()
+        ? "You are editing the existing website in the currently selected project. Apply the user’s requested change to this exact HTML, preserve all unrelated layout, styling, content, and behavior, and return ONLY the complete updated HTML document with no markdown fences or explanation.\n\nCURRENT WEBSITE HTML:\n" + previewCode.slice(0, 9500) + "\n\nUSER CHANGE REQUEST:\n" + text
+        : text;
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text, history: messages.slice(-12) })
+        body: JSON.stringify({ prompt: requestPrompt, history: messages.slice(-12) })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "The request failed.");
-      setMessages([...next, { role: "assistant", content: data.answer }]);
+      const rawAnswer = String(data.answer || "");
+      const updatedHtml = rawAnswer.replace(/^```(?:html)?\\s*/i, "").replace(/\\s*```$/i, "").trim();
+      const updatedExistingWebsite = Boolean(previewCode.trim()) && (updatedHtml.toLowerCase().includes("<html") || updatedHtml.toLowerCase().includes("<!doctype"));
+      if (updatedExistingWebsite) {
+        setPreviewCode(updatedHtml);
+        setPreviewOpen(true);
+      }
+      const visibleAnswer = updatedExistingWebsite ? "Updated the existing website preview in this project. The live preview now reflects your requested change." : rawAnswer;
+      setMessages([...next, { role: "assistant", content: visibleAnswer }]);
       if (activeProjectId) {
-        await fetch("/api/projects/" + activeProjectId + "/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "assistant", content: data.answer, model: data.model }) }).catch(() => undefined);
+        await fetch("/api/projects/" + activeProjectId + "/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "assistant", content: visibleAnswer, model: data.model }) }).catch(() => undefined);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
