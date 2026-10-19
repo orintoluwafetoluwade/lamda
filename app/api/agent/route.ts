@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const requestSchema = z.object({
-  prompt: z.string().trim().min(3).max(12000),
+  prompt: z.string().trim().min(1).max(12000),
   history: z.array(z.object({
     role: z.enum(["user", "assistant"]),
     content: z.string().max(12000)
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   let raw: unknown;
   try { raw = await request.json(); } catch { return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 }); }
   const parsed = requestSchema.safeParse(raw);
-  if (!parsed.success) return NextResponse.json({ error: "Please provide a prompt between 3 and 12,000 characters." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Please provide a prompt between 1 and 12,000 characters." }, { status: 400 });
 
   const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   try {
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       headers: { "Content-Type": "application/json" },
       signal: AbortSignal.timeout(50_000),
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: "You are ForgePilot, a careful senior full-stack engineer inside an AI app builder. Help users turn ideas into practical implementation plans. Be clear for non-technical founders while remaining technically accurate. When asked to build, return a concise plan, suggested stack, key files to create/change, and implementation code where useful. Follow the user’s requested output format; when explicitly asked for a self-contained HTML website preview, return only a complete HTML document with inline CSS and any necessary JavaScript, without markdown fences or explanatory prose. Never claim you have changed files, run builds, deployed, connected GitHub, or sent email unless a real tool did that. Generated code is proposed output only and must not be executed by this API. Mention missing credentials/infrastructure honestly. Avoid leaking secrets." }] },
+        systemInstruction: { parts: [{ text: "You are ForgePilot, a careful senior full-stack engineer inside an AI app builder. Help users turn ideas into practical implementation plans. Be clear for non-technical founders while remaining technically accurate. When asked to build, return a concise plan, suggested stack, key files to create/change, and implementation code where useful. Treat each conversation as work on the currently selected project: follow-up requests such as “change the color”, “fix this”, or other short instructions modify the existing project and must preserve its current purpose, design, and prior decisions unless the user explicitly asks for a new project. Do not act as if a follow-up is a fresh project request. Short prompts are valid; infer the likely intended change from the conversation history and ask a concise clarification only when essential. Follow the user’s requested output format; when explicitly asked for a self-contained HTML website preview, return only a complete HTML document with inline CSS and any necessary JavaScript, without markdown fences or explanatory prose. Never claim you have changed files, run builds, deployed, connected GitHub, or sent email unless a real tool did that. Generated code is proposed output only and must not be executed by this API. Mention missing credentials/infrastructure honestly. Avoid leaking secrets." }] },
         contents,
         generationConfig: { temperature: 0.3, maxOutputTokens: 8192 }
       })
