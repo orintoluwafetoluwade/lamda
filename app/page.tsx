@@ -5,7 +5,7 @@ import { ArrowUp, Bot, Check, ChevronDown, CircleHelp, Clock3, Code2, Command, E
 
 type Message = { role: "user" | "assistant"; content: string };
 type Health = { configured: boolean; model: string; status: string };
-type IntegrationStatus = { github: { configured: boolean }; appwrite: { authConfigured: boolean; databaseConfigured: boolean }; previewRuntime: { configured: boolean } };
+type IntegrationStatus = { github: { configured: boolean }; supabase: { authConfigured: boolean; databaseConfigured: boolean; mode: string }; previewRuntime: { configured: boolean } };
 type Project = { id: string; name: string; description?: string; created_at?: string; updated_at?: string };
 const starters = [
   { icon: "layout", title: "Build a SaaS dashboard", prompt: "Plan a modern SaaS analytics dashboard with key metrics, an activity feed, responsive navigation, and polished UI." },
@@ -175,7 +175,7 @@ export default function Home() {
             <div className="integration-list">
               <Integration icon={<Sparkles size={20} />} name="Google Gemini" desc="Power the coding agent with Gemini models." status={health?.configured ? "Connected" : "Needs setup"} ready={Boolean(health?.configured)} detail={health?.configured ? "Model: " + health.model : "Add GEMINI_API_KEY to your server environment."} />
               <Integration icon={<Github size={20} />} name="GitHub" desc="Connect repositories, create branches and open pull requests." status={integrationStatus?.github.configured ? "Credentials configured" : "Needs setup"} ready={Boolean(integrationStatus?.github.configured)} detail={integrationStatus?.github.configured ? "Credentials are present; repository actions still need end-to-end implementation." : "Configure a GitHub App and server-side installation credentials."} />
-              <Integration icon={<Layers3 size={20} />} name="Appwrite" desc="Handle authentication and persist projects and messages." status={integrationStatus?.appwrite.databaseConfigured ? "Credentials configured" : "Not connected"} ready={Boolean(integrationStatus?.appwrite.databaseConfigured)} detail={integrationStatus?.appwrite.databaseConfigured ? "Credentials are present; verify collection attributes and test signup, projects, and messages." : "Configure Appwrite endpoint, project, database, collections, and server API key."} />
+              <Integration icon={<Layers3 size={20} />} name="Supabase" desc="Secure authentication and persist projects and conversations." status={integrationStatus?.supabase.databaseConfigured ? "Credentials configured" : "Not connected"} ready={Boolean(integrationStatus?.supabase.databaseConfigured)} detail={integrationStatus?.supabase.databaseConfigured ? "Supabase URL and public key are present. Sign-up, projects, and messages use authenticated sessions and row-level security." : "Configure the Supabase project URL and publishable/anon key."} />
               <Integration icon={<Terminal size={20} />} name="Isolated preview runtime" desc="Run generated projects away from the application server." status={integrationStatus?.previewRuntime.configured ? "Credentials configured" : "Not connected"} ready={Boolean(integrationStatus?.previewRuntime.configured)} detail={integrationStatus?.previewRuntime.configured ? "Provider credentials are present; runtime adapter still needs implementation." : "A dedicated sandbox provider is required; generated code is not executed here."} />
               <Integration icon={<Rocket size={20} />} name="Deployment" desc="Ship tested projects to a production hosting provider." status="Not connected" detail="Connect a deployment provider after preview and build isolation are implemented." />
             </div>
@@ -213,7 +213,7 @@ export default function Home() {
                 ))}
               </div>
             ) : (
-              <div className="empty-projects"><div className="empty-icon"><FileCode2 size={24} /></div><h2>No saved projects yet</h2><p>Once Appwrite is configured, projects and conversation messages are saved to your account here.</p><button className="primary-button" onClick={() => { setMessages([]); setProjectName("Untitled project"); setProjectId(null); setTab("workspace"); }}>Start a project <Plus size={16} /></button></div>
+              <div className="empty-projects"><div className="empty-icon"><FileCode2 size={24} /></div><h2>No saved projects yet</h2><p>Your projects and conversation messages are saved securely to your Supabase account.</p><button className="primary-button" onClick={() => { setMessages([]); setProjectName("Untitled project"); setProjectId(null); setTab("workspace"); }}>Start a project <Plus size={16} /></button></div>
             )}
           </div>
         )}
