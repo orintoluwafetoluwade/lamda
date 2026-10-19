@@ -27,3 +27,14 @@
 .browser-dots i{width:6px;height:6px;border-radius:50%;background:#65716f}
 .preview-error{margin:0;padding:10px 13px;color:#ffb9ad;background:#281816;font-size:11px}
 @media(max-width:850px){.preview-split{grid-template-columns:1fr}.preview-editor{border-right:0;border-bottom:1px solid #252c32}.preview-editor textarea{min-height:240px;max-height:360px}.preview-browser iframe{height:420px}.preview-workbench{width:calc(100% - 20px)}}
+
+/* Named project creation flow */
+.new-project-page .page-heading{max-width:650px}
+.project-create-form{width:min(620px,100%);display:flex;flex-direction:column;gap:10px;padding:22px;border:1px solid #2a3038;background:linear-gradient(120deg,#151a1f,#111418);border-radius:12px}
+.project-create-form label{font-size:11px;color:#cdd4da;font-weight:600}
+.project-create-form input{width:100%;height:44px;border:1px solid #303941;border-radius:8px;background:#0c1013;color:#eef3f4;padding:0 12px;font-size:13px;outline:0}
+.project-create-form input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px #56e0cf12}
+.project-create-actions{display:flex;justify-content:flex-end;align-items:center;gap:9px;margin-top:9px}
+.project-create-actions .primary-button{cursor:pointer}
+.project-create-actions .primary-button:disabled{opacity:.5;cursor:not-allowed}
+.project-create-error{font-size:11px;color:#ffb9ad;margin:2px 0}
