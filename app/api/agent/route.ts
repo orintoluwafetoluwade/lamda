@@ -74,21 +74,40 @@ export async function POST(request: Request) {
         generationConfig: { temperature: 0.3, maxOutputTokens: 8192 }
       })
     });
-    const payload = await response.json();
+    const payload = await response.json().catch(() => null);
     if (!response.ok) {
       const status = response.status;
-      const message = status === 401 || status === 403 ? "Gemini rejected the API key. Check GEMINI_API_KEY." : status === 429 ? "Gemini rate limit or quota reached. Check your API quota." : `Gemini request failed (${status}). Please retry.`;
+      const message =
+        status === 401 || status === 403 ? "Gemini rejected the API key. Check that GEMINI_API_KEY is valid and enabled for the Gemini API." :
+        status === 429 ? "Gemini rate limit or quota reached. Check the API quota and billing for the Google AI project." :
+        status === 404 ? `Gemini model "${model}" was not found. Set GEMINI_MODEL to a model available to your API key.` :
+        status === 400 ? "Gemini rejected the request. Check the configured model and request settings." :
+        `Gemini request failed (${status}). Please retry.`;
+      console.error("Gemini API returned an error", { status, model, providerMessage: payload?.error?.message || "No provider error message" });
       return NextResponse.json({ error: message }, { status: 502 });
     }
     const answer = payload?.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || "").join("").trim();
-    if (!answer) return NextResponse.json({ error: "Gemini returned an empty response. Please try again." }, { status: 502 });
+    if (!answer) {
+      console.error("Gemini returned no text candidate", { model, finishReason: payload?.candidates?.[0]?.finishReason || "unknown" });
+      return NextResponse.json({ error: "Gemini returned an empty response. Please try again." }, { status: 502 });
+    }
     const usage = payload?.usageMetadata;
     return NextResponse.json({
       answer,
       model,
       usage: usage ? { inputTokens: usage.promptTokenCount, outputTokens: usage.candidatesTokenCount } : undefined
     });
-  } catch {
-    return NextResponse.json({ error: "Could not reach Gemini. Check server logs and try again." }, { status: 502 });
+  } catch (error) {
+    const isTimeout = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+    console.error("Gemini API connection failed", {
+      model,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      errorMessage: error instanceof Error ? error.message : "Unknown error"
+    });
+    return NextResponse.json({
+      error: isTimeout
+        ? "Gemini took too long to respond. Please retry; if it keeps happening, check Google AI Studio quota and model availability."
+        : "ForgePilot could not reach the Gemini API from its server. Check the deployment logs and Gemini API availability."
+    }, { status: 502 });
   }
 }
